@@ -1,0 +1,291 @@
+#load_macros('macros-custom.vm')
+#load_behavior('ksp.js')
+#load_behavior('splice-into.js')
+#load_behavior('submit-on-attribute-change.js')
+#set($ChecksheetModel = $Model.toPathString())
+#set($i = 1)
+#set($ChecksheetOrd = $Ord.get($ChecksheetModel))
+#set($workcenter = $Ord.get("/@/#area_of($Model)/#workcenter_of($Model)"))
+##set($max = $Ord.get("${ChecksheetModel}/Scheduled_Jobs_PLC_Get").rowCount)
+##set($currentJobNo = $Ord.get("${Job}/JobNo").out )
+#set($PageState = $Model.ChecksheetHandler.PageStatus.out.value)
+#set($LogicStatus = $Model.ChecksheetHandler.LogicStatus.out.value) ##determines if page is loading or not
+
+<div class="main" id="wrapper">
+  #if($LogicStatus == 1)
+  <div id="dialog" a-dialog="box" ksp-socket>
+            <form action="#current_page()" ksp-component="$Ord.of($Model.ChecksheetHandler.LogicStatus)" submit-on-attribute-change="ksp-value" ksp-slot="out" ksp-value="$LogicStatus" 
+             splice-into="#wrapper" style="display: none;">
+                <input type="hidden" name="page" value="$Ord.of($Model)">
+            </form>
+            <h2 a-dialog="tall title">Loading Please wait. </h2>
+            <div>Awaiting Plex Response...<img src="/deltav/static/images/loading.gif" style="height:100px; width:90px;"></img></div>
+        </div>
+        
+  #elseif($LogicStatus == 2)##error status
+  <div id="dialog" a-dialog="box" ksp-socket>
+            <form action="#current_page()" ksp-component="$Ord.of($Model.ChecksheetHandler.LogicStatus)" submit-on-attribute-change="ksp-value" ksp-slot="out" ksp-value="$LogicStatus" 
+             splice-into="#wrapper" style="display: none;">
+                <input type="hidden" name="page" value="$Ord.of($Model)">
+            </form>
+            <h2 a-dialog="tall title">⚠️Error Completing Checksheet</h2>
+            <div>Message: $Ord.get("${ChecksheetModel}/HandleError/ErrorMessage").out.value <img src="/deltav/static/images/errorDog.png" style="height:200px; width:180px;"></img></div>
+            <div>
+              ####################################################CHECK THIS SECTION
+              #if($Ord.get("${ChecksheetModel}/HandleError/checksheetOutOfSpec/out").value)
+                #set($QuestionNo1 = $Ord.get("${ChecksheetModel}/HandleError/QuestionNo1").out)
+                #if($QuestionNo1 > 0 && $Ord.get("${ChecksheetModel}/BuildChecksheet/Question${QuestionNo1}").outField_01.value.length() > 0)
+                  <span>${QuestionNo1}. $Ord.get("${ChecksheetModel}/BuildChecksheet/Question${QuestionNo1}").outField_01.value</span>
+                #end
+            </div>
+            <div>
+                #set($QuestionNo2 = $Ord.get("${ChecksheetModel}/HandleError/QuestionNo2").out)
+                #if($QuestionNo2 > 0 && $Ord.get("${ChecksheetModel}/BuildChecksheet/Question${QuestionNo2}").outField_01.value.length() > 0)
+                  <span>${QuestionNo2}. $Ord.get("${ChecksheetModel}/BuildChecksheet/Question${QuestionNo2}").outField_01.value</span>
+                #end
+              #else
+              <span>An unexpected error has occured</span>
+              #end
+            </div>
+            <form action="#root()/slots" method="post" > ##Form for resetting page
+              #csrf_field()
+              <input type="hidden" name="redirect" value="#current_page()" />
+              <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/ChecksheetHandler/update/fire">
+              <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/ChecksheetHandler/LogicStatusSimple/Success">
+              <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/ChecksheetHandler/PageStatus/set" value="0"  />
+              <button a-control="button">Ok</button>
+            </form>
+        </div>
+        ##error status end
+   ##########################################################################################     
+  #elseif($PageState == 0) ##checksheet Overview
+  <table>
+    <tr>
+      <th>Inspection Mode</th>
+      <th>Frequency</th>
+      <th>Currently Due</th>
+      <th>Check</th>
+    </tr>
+    #foreach($property in  $Model.ChecksheetHandler.Properties)
+    #if($property.name == "PlexDataSourceSelector${i}" && $Ord.get("${ChecksheetModel}/ChecksheetHandler/PlexDataSourceSelector${i}").out_Inspection_Mode.value.length() > 1)
+      <tr #if($Ord.get("${ChecksheetModel}/ChecksheetHandler/PlexDataSourceSelector${i}").out_Checksheet_Due.value) style="background-color:yellow;#else style="background-color:lightgreen;" #end">
+        <td>$Ord.get("${ChecksheetModel}/ChecksheetHandler/PlexDataSourceSelector${i}").out_Inspection_Mode.value</td>
+        
+        #if($Ord.get("${ChecksheetModel}/ChecksheetHandler/PlexDataSourceSelector${i}").out_Required_Time.value >0)
+        <td>$Ord.get("${ChecksheetModel}/ChecksheetHandler/PlexDataSourceSelector${i}").out_Required_Time.value</td>
+        
+        #elseif($Ord.get("${ChecksheetModel}/ChecksheetHandler/PlexDataSourceSelector${i}").out_Required_Each_Shift.value && $Ord.get("${ChecksheetModel}/ChecksheetHandler/PlexDataSourceSelector${i}").out_Required_Each_Operator.value)
+        <td>Each Shift, Each Operator</td>
+        
+        #elseif($Ord.get("${ChecksheetModel}/ChecksheetHandler/PlexDataSourceSelector${i}").out_Required_Each_Shift.value)
+        <td>Each Shift</td>
+        
+        #elseif($Ord.get("${ChecksheetModel}/ChecksheetHandler/PlexDataSourceSelector${i}").out_Required_Each_Operator.value)
+        <td>Each Operator</td>
+        
+        #else
+        <td>On Job Change</td>
+        #end
+        
+        <td>$Ord.get("${ChecksheetModel}/ChecksheetHandler/PlexDataSourceSelector${i}").out_Checksheet_Due.value</td>
+        <td>
+          #set($checksheetType = $Ord.get("${ChecksheetModel}/ChecksheetHandler/PlexDataSourceSelector${i}").out_Inspection_Mode.value)
+          #if($checksheetType.contains("Quality") && !$checksheetType.contains("Quality Alert"))
+          <button a-control="button" disabled>Must be completed by Quality</button>
+          #else
+          <form action="#root()/slots" method="post">
+            #csrf_field()
+            <input type="hidden" name="redirect" value="#current_page()" />
+            <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/BuildChecksheet/inspectionMode/set" value="$Ord.get("${ChecksheetModel}/ChecksheetHandler/PlexDataSourceSelector${i}").out_Inspection_Mode.value"  />
+            <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/BuildChecksheet/controlPlanKey/set" value="$Ord.get("${ChecksheetModel}/ChecksheetHandler/PlexDataSourceSelector${i}").out_Control_Plan_Key.value"  />
+            <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/BuildChecksheet/sectionKey/set" value="$Ord.get("${ChecksheetModel}/ChecksheetHandler/PlexDataSourceSelector${i}").out_Section_Key.value"  />
+            <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/ChecksheetHandler/PageStatus/set" value="1"  />
+            <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/ChecksheetHandler/LogicStatusSimple/Processing">
+            <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/BuildChecksheet/getChecksheet/fire"  />
+            #if($Ord.get("${ChecksheetModel}/GetChecksheetUsers/userRowCount").out.value >= 1)
+            <button a-control="button">Select</button>
+            #else
+            <button disabled a-control="button">Please Clock in Operator</button>
+            #end
+          </form>
+          #end
+        </td>
+      </tr>
+      #set($i = $i+1)
+    #end
+    #end
+  </table>
+  <form action="#root()/slots" method="post" style="display:inline;"> ##dynamic form for building and submitting checksheet
+      #csrf_field()
+      <input type="hidden" name="redirect" value="#current_page()" />
+      <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/ChecksheetHandler/update/fire"/>
+      <button a-control="button">Refresh Checksheets</button>
+    </form>
+  ##End check sheet overview
+  
+  #elseif($PageState == 1) ##when a checksheet is selected, build the form
+  <form action="#current_page()" ksp-component="$Ord.of($Model.ChecksheetHandler.LogicStatus)" submit-on-attribute-change="ksp-value" ksp-slot="out" ksp-value="$LogicStatus" 
+             splice-into="#wrapper" style="display: none;">
+                <input type="hidden" name="page" value="$Ord.of($Model)">
+            </form>
+  #set($i = 1)
+  #set($userI = 1)
+  #set($maxQ = $Ord.get("${ChecksheetModel}/BuildChecksheet/SplitQuestions").outItems.value) ##get number of questions to iterate over
+    <h1 class="mainTitle">Checksheet Form</h1>
+    <h2 class="checksheetTitle">$Ord.get("${ChecksheetModel}/BuildChecksheet/Question1").outField_00.value</h2>
+    
+    <form action="#root()/slots" method="post" style="display:inline;"> ##dynamic form for building and submitting checksheet
+      #csrf_field()
+      <input type="hidden" name="redirect" value="#current_page()" />
+      <div>
+        ##get checksheet users 
+        <span>Checksheet User:</span>
+        <span><select required name="invoke:$Model.toPathString()/ChecksheetHandler/ChecksheetUser/set"> ##set the checksheet user within the handler
+          #foreach($property in  $Model.GetChecksheetUsers.Properties)
+            #if($property.name == "userId${userI}" && $Ord.get("${ChecksheetModel}/GetChecksheetUsers/userRowCount").out.value >= $userI)
+              <option value="$Ord.get("${ChecksheetModel}/GetChecksheetUsers/userId${userI}").out.value" >$Ord.get("${ChecksheetModel}/GetChecksheetUsers/firstName${userI}").out.value ,$Ord.get("${ChecksheetModel}/GetChecksheetUsers/lastName${userI}").out.value</option>
+             #set($userI = $userI + 1)
+            #end
+            
+          #end
+        </select></span>
+      </div>
+      <table>
+        <tr>
+          <th class="tableHeader">Question</th>
+          <th class="tableHeader">Detail</th>
+          <th colspan="2" class="tableHeader">Answer</th>
+          
+          <th class="tableHeader">Reaction Plan</th>
+        </tr>
+    #foreach($property in  $Model.BuildChecksheet.Properties)
+    
+      #if($i <= $maxQ && $property.name == "Question${i}" && $Ord.get("${ChecksheetModel}/BuildChecksheet/Question${i}").outField_06.value.length() > 1) ##added 3/8/23
+      <tr>
+        
+          <td class="checksheetField"><span>$i.</span><span>$Ord.get("${ChecksheetModel}/BuildChecksheet/Question${i}").outField_01.value</span></td>
+          #if($Ord.get("${ChecksheetModel}/BuildChecksheet/Question${i}").outField_02.value.length() > 0)
+          
+          <td class="checksheetField"> ##Get Question Detail
+          #if($Ord.get("${ChecksheetModel}/BuildChecksheet/Question${i}").outField_15.value.length() > 0)
+            <span>$Ord.get("${ChecksheetModel}/BuildChecksheet/Question${i}").outField_15.value</span>
+          #end
+          </td>
+          
+          ##build boolean questions 
+            <fieldset id="group${i}">
+              
+            <td class="checksheetField"><label>$Ord.get("${ChecksheetModel}/BuildChecksheet/Question${i}").outField_02.value</label>
+            <input class="radioButton" type="radio" a-control="field" name="invoke:$Model.toPathString()/CompleteChecksheet/PLCValue${i}/set" value="1"  ></td>  
+            
+            <td class="checksheetField"><label>$Ord.get("${ChecksheetModel}/BuildChecksheet/Question${i}").outField_03.value</label>
+            <input class="radioButton" type="radio" a-control="field" name="invoke:$Model.toPathString()/CompleteChecksheet/PLCValue${i}/set" value="0" ></td>
+            </fieldset>
+            
+            ##set checkhseet parameter for boolean questions
+          <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/CompleteChecksheet/Parameter${i}/set" value="$Ord.get("${ChecksheetModel}/BuildChecksheet/Question${i}").outField_06.value" />
+          
+          #else  ##If there are are no pass/fail params it is a numerical value
+          
+          <td class="checksheetField"> ##Get Question Detail
+          #if($Ord.get("${ChecksheetModel}/BuildChecksheet/Question${i}").outField_15.value.length() > 0)
+            <span>$Ord.get("${ChecksheetModel}/BuildChecksheet/Question${i}").outField_15.value</span>
+          #end
+          </td>
+          
+          ##<span>Upper Limit: $Ord.get("${ChecksheetModel}/ProductionAlerts/QualityAlert/Checksheets/Build/Question${i}").outField_04.value</span>
+          
+          <td class="checksheetField" colspan="2"><input required autocomplete="off" type="text" a-control="field" name="invoke:$Model.toPathString()/CompleteChecksheet/PLCValue${i}/set"></td>
+          
+          ##<span>Lower Limit: $Ord.get("${ChecksheetModel}/ProductionAlerts/QualityAlert/Checksheets/Build/Question${i}").outField_05.value</span>
+          ##set checkhseet parameter for numerical questions
+            
+            <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/CompleteChecksheet/Parameter${i}/set" value="$Ord.get("${ChecksheetModel}/BuildChecksheet/Question${i}").outField_06.value" />
+            
+          #end
+          
+        
+        <td class="checksheetField">
+            $Ord.get("${ChecksheetModel}/BuildChecksheet/Question${i}").outField_16.value $Ord.get("${ChecksheetModel}/BuildChecksheet/Question${i}").outField_17.value
+          </td>
+          </tr>
+          
+          
+        #set($i = $i+1)
+      #end
+      
+      
+      
+    #end
+    </table>
+    ##<input type="hidden" a-control="field" name="invoke:$Model.toPathString()/Checksheet_Papertech_Spec/Inspection_Mode/set" value="$Ord.get("${ChecksheetModel}/ProductionAlerts/QualityAlert/Checksheets/Build/Question1").outField_00.value" />##set checkhseet inspection mode for DS
+    <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/ChecksheetHandler/PageStatus/set" value="0"  />##reset view back to table 
+    <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/CompleteChecksheet/Do/fire"  /> ##submit params and values to be concatinated
+    <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/ChecksheetHandler/update/fire">
+    <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/ChecksheetHandler/LogicStatusSimple/Processing">
+    <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/BuildChecksheet/BuildChecksheetManualThreaded2/Clear">
+    #if($Ord.get("${ChecksheetModel}/GetChecksheetUsers/userRowCount").out.value >= 1)##make sure we have an operator logged in
+      <button a-control="button" style="display:inline; margin: 10px 40px;">Submit Checksheet</button>
+    #else
+      <button disabled a-control="button" style="display:inline; margin: 10px 40px;">Please Clock in Operator</button>
+    #end
+    </form>  
+    ##cancel form
+    
+    <form action="#root()/slots" method="post" style="display:inline; padding: 10px 40px;"> ##dynamic form for building and submitting checksheet
+      #csrf_field()
+    <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/ChecksheetHandler/PageStatus/set" value="0"  />##reset view back to table 
+    <input type="hidden" name="redirect" value="#current_page()" />
+    <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/ChecksheetHandler/LogicStatusSimple/Processing">
+    <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/ChecksheetHandler/update/fire">
+    <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/BuildChecksheet/BuildChecksheetManualThreaded2/Clear">
+    <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/BuildChecksheet/inspectionMode/set" value="">
+    <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/BuildChecksheet/controlPlanKey/set" value="">
+    <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/BuildChecksheet/sectionKey/set" value="">
+    <button a-control="button" style="display:inline; margin: 10px 40px;">Cancel</button>
+    </form>
+  #end
+  
+</div>
+<style>
+  .mainTitle{
+    text-align:center;
+  }
+  .checksheetTitle{
+    text-align:center;
+  }
+  td, th{
+    border: solid 1px black;
+    padding: 5px 10px;
+  }
+  .QuestionGroup{
+    border:1px solid black;
+    padding:20px 0;
+  }
+label{
+  display:inline;
+  text-align:center;
+}
+.radioButton{
+  display:inline;
+}
+table{
+  
+  width: 100%;
+}
+.tableHeader{
+  background-color:#57626e;
+  color:white;
+  font-weight:bold;
+}
+tr:nth-child(even) {
+  background-color: #f2f2f2;
+}
+tr:nth-child(odd) {
+  background-color: #ffffff;
+}
+
+#dashboard-cell-3f14d{
+  background-color:#fbe2c2;
+}
+</style>
