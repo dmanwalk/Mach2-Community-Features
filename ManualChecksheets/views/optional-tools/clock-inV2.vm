@@ -1,0 +1,82 @@
+#load_stylesheet('optional-tools.css')
+#set($workcenter = $Ord.get("/@/#area_of($Model)/#workcenter_of($Model)"))
+#set($folder = $Ord.of($Model))
+#if($Ord.get("$folder/ClockinSettings").get("UNEnable").value)
+    #set($label = 'Operator PUN')
+#elseif($Ord.get("$folder/ClockinSettings").get("BadgeNoEnable").value)
+    #set($label = 'Badge Number')
+#else
+    #set($label = 'Employee Number')
+#end
+
+<div an-optional-tool="error message shown-if-true" ksp-component="$folder/Failure" ksp-slot="out" style="flex-direction: column;">
+    Failure
+    <div ksp-component="$folder/errorMsg" ksp-slot="In_3" ksp-embed-value style="font-size: 20pt; color: white;">$Ord.get("$folder/errorMsg/In_3")</div>
+</div>
+
+<div an-optional-tool="success message shown-if-true" ksp-component="$folder/Success" ksp-slot="out">
+    Success
+</div>
+
+#set($booleanComponent = $Ord.get("$folder/GreaterThan"))
+<div an-optional-tool="container with-footer shown-if-true" ksp-component="$folder/GreaterThan" ksp-slot="out" ksp-value="$booleanComponent.Out.Value">
+    <div>
+        <div>
+            <span an-optional-tool="basic-label">${label}: </span>
+            <span ksp-component="$folder/newClockIn" ksp-slot="stringIn" ksp-embed-value>
+                $Ord.get("$folder/newClockIn/stringIn")
+            </span>
+        </div>
+        <div>
+            <span an-optional-tool="basic-label">Labor Type: </span>
+            #set($initialLabelCode = $Ord.get("$folder/Labor_Code/out"))
+            <span id="laborType" ksp-component="$folder/Labor_Code" ksp-slot="out" ksp-embed-value ksp-value="$initialLabelCode">$initialLabelCode</span>
+        </div>
+        <form action="#root()/slots" method="post" clear-onsubmit ksp-component="$folder/ClockinSettings">
+            #csrf_field()
+            <span an-optional-tool="basic-label">Change Labor Type:</span>
+            <span style="display: grid; grid-template-columns: repeat(3,1fr); grid-gap: 2px;">
+            #foreach($i in [1..5])
+                <button a-control="button" ksp-slot="KeyEnabled$i" an-optional-tool="shown-if-true" 
+                ksp-value="$Ord.get("$folder/ClockinSettings/KeyEnabled$i").value"  type="submit" name="invoke:$folder/setCode$i/SetValue">
+                    $Ord.get("$folder/setCode$i/inString").value
+                </button>
+            #end
+            </span>
+        </form>
+    </div>
+    <form action="#root()/slots" method="post" clear-onsubmit style="display: flex; justify-content: space-evenly; align-items: center;">
+        #csrf_field()
+        <button a-control="button" type="submit" name="invoke:$folder/ClockIn/fire" disable-if="#laborType[ksp-value='']">Clock In</button>
+        <button a-control="button" type="submit" name="invoke:$folder/ClockOut/fire" disable-if="#laborType[ksp-value='']">Clock Out</button>
+        <button a-control="button" type="submit" name="invoke:$folder/cancel/fire">Cancel</button>
+    </form>
+</div>
+
+<div an-optional-tool="container hidden-after-true">
+    <div an-optional-tool="basic-label">Please Scan/Enter $label</div>
+
+    <form action="#root()/slots" method="post" clear-onsubmit>
+        #csrf_field()
+        <input a-control="field" type="text" name="invoke:$folder/NewClockinNo/set" autocomplete="off">
+        <button a-control="button" type="submit">Enter Login</button>
+    </form>
+
+    ##if($Ord.get("$folder/ClockinSettings/Settings/TransactionHistory/Enable").get("out").value)
+        ##<div an-optional-tool="basic-label">Transaction History:</div>
+        ##set($historyComponent = $Ord.get("$folder/History"))
+        ##<div ksp-component="$folder/History" style="background-color: gainsboro; border: solid 1px black;">
+        ##foreach($i in [0..7])
+            ##<div ksp-slot="stringOut0$i" ksp-embed-value>
+           ##     $historyComponent.get("stringOut0$i").value
+         ##   </div>
+        ##end
+        ##end
+        $Template.render('views/optional-tools/clocked-in-usersV2.vm', {'Model' : $Model.CurrentClockedInUsersV2 })
+      </div>
+    
+</div>
+
+#load_behavior("ksp.js")
+#load_behavior("disable-if.js")
+#load_behavior("clear-onsubmit.js")

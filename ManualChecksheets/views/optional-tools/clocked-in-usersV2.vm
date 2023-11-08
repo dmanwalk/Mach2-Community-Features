@@ -1,0 +1,74 @@
+#load_macros("macros-custom.vm")
+#load_behavior("ksp.js")
+#load_behavior("disable-if.js")
+#load_behavior("clear-onsubmit.js")
+#load_behavior('splice-into.js')
+#load_behavior('submit-on-attribute-change.js')
+#set($workcenter = $Ord.get("/@/#area_of($Model)/#workcenter_of($Model)"))
+#set($LogicStatus = $Model.Workcenter_Clockin_Costs_Get.goodTransactions)
+<form action="#current_page()" ksp-component="$Ord.of($Model.Workcenter_Clockin_Costs_Get)" submit-on-attribute-change="ksp-value" ksp-slot="goodTransactions" ksp-value="$LogicStatus" 
+             splice-into="#clocked-in-wrapper" style="display: none;">
+                <input type="hidden" name="page" value="$Ord.of($Model)">
+            </form>
+<div id="clocked-in-wrapper" class="clocked-in-users">
+  #if($Model.Workcenter_Clockin_Costs_Get.RowCount == 0)
+    <div class="message">
+      <span> No Clocked in users</span>
+    </div>
+  #else
+    #set($i = 1)
+   
+    #foreach($object in $Model.Properties)
+    ##methods($Model)
+      #if($object.name.contains("Workcenter_Clockin_Costs_GetSelector"))
+        #if($i <= $Model.Workcenter_Clockin_Costs_Get.RowCount)
+          <div class="user-container">
+            <span class="opname">${i} |</span>
+            <span class="opname">Name:</span>
+            <span class="name" ksp-component="$Ord.of($Model.get($object.name))" ksp-slot="out_First_Name" ksp-embed-value>$Model.get($object.name).out_First_Name.value</span>
+            <span class="name" ksp-component="$Ord.of($Model.get($object.name))" ksp-slot="out_Last_Name" ksp-embed-value>$Model.get($object.name).out_Last_Name.value</span>
+            <span class="opname">Username:</span>
+            <span class="ID" ksp-component="$Ord.of($Model.get($object.name))" ksp-slot="out_User_ID" ksp-embed-value>$Model.get($object.name).out_User_ID.value</span>
+            <form action="#root()/slots" method="post" > 
+                    #csrf_field() 
+                    <input type="hidden" name="redirect" value="#current_page()" />
+                    <input type="hidden" a-control="field" value="$Ord.get("${Model.get($object.name).toPathString()}/out_Plexus_User_No")" name="invoke:$Model.toPathString()/ClockOutOperators/PlexUserNo/set">
+                    <input type="hidden" a-control="field" name="invoke:$Model.toPathString()/ClockOutOperators/ClockOut/fire">
+                    <button a-control="button">Logout</button>
+            </form>
+          </div>
+          #set($i = $i +1)
+        #end
+      #end
+    #end
+   
+  #end
+
+  
+<style>
+  .user-container{
+    display:block;
+    background-color:hsl(198, 100%, 42%);
+    color:white;
+    text-align:center;
+    font: 25px Arial, sans-serif;
+  }
+  .message{
+    background-color:red;
+    text-align:center;
+    font: 25px Arial, sans-serif;
+  }
+
+  .name{
+    font-weight:bolder;
+    color:white;
+  }
+  .ID{
+    font-weight:bolder;
+    color:white;
+  }
+  .opname{
+    color:white;
+  }
+  
+</style>
